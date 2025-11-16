@@ -9,11 +9,11 @@ from config import Settings
 
 
 def _build_httpx_client(cfg: Settings) -> httpx.Client:
-    proxies = None
+    proxy = None
     if cfg.proxy_url:
-        proxies = {"http://": cfg.proxy_url, "https://": cfg.proxy_url}
+        proxy = cfg.proxy_url
     return httpx.Client(
-        proxies=proxies,
+        proxy=proxy,
         verify=not cfg.disable_ssl,
         timeout=httpx.Timeout(60.0, connect=30.0, read=60.0),
     )

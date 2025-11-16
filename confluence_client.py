@@ -18,9 +18,9 @@ class ConfluenceClient:
 
         base_url = cfg.confluence_base_url.rstrip("/")
 
-        proxies = None
+        proxy = None
         if cfg.proxy_url:
-            proxies = {"http://": cfg.proxy_url, "https://": cfg.proxy_url}
+            proxy = cfg.proxy_url
 
         headers = {
             "Accept": "application/json",
@@ -40,7 +40,7 @@ class ConfluenceClient:
             headers["Authorization"] = f"Bearer {cfg.confluence_access_token}"
 
         # Discover a working REST API base to avoid 302 to /login.action
-        api_base = self._discover_api_base(base_url, headers, auth, proxies, not cfg.disable_ssl)
+        api_base = self._discover_api_base(base_url, headers, auth, proxy, not cfg.disable_ssl)
         self.api_base = api_base
 
         self.client = httpx.Client(
@@ -48,7 +48,7 @@ class ConfluenceClient:
             headers=headers,
             auth=auth,
             verify=not cfg.disable_ssl,
-            proxies=proxies,
+            proxy=proxy,
             timeout=httpx.Timeout(30.0, connect=30.0, read=30.0),
             follow_redirects=False,
         )
@@ -65,7 +65,7 @@ class ConfluenceClient:
         base_url: str,
         headers: Dict[str, str],
         auth: Optional[Tuple[str, str]],
-        proxies: Optional[Dict[str, str]],
+        proxy: Optional[str],
         verify: bool,
     ) -> str:
         # If user already points to a REST API base, respect it
@@ -78,7 +78,7 @@ class ConfluenceClient:
         candidates.append(f"{base_url}/wiki/rest/api")
 
         # Try each candidate with a lightweight call that exists on all editions
-        tmp = httpx.Client(headers=headers, auth=auth, verify=verify, proxies=proxies, timeout=10.0, follow_redirects=False)
+        tmp = httpx.Client(headers=headers, auth=auth, verify=verify, proxy=proxy, timeout=10.0, follow_redirects=False)
         try:
             for cand in candidates:
                 try:

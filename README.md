@@ -1,12 +1,12 @@
 Confluence RAG with Chainlit
 ================================
 
-This app provides a working RAG (Retrieval-Augmented Generation) chatbot over Confluence using a vector DB (Chroma) and Chainlit UI. It supports configurable OpenAI-compatible LLMs and Confluence, plus shared proxy and SSL options. Chat history is maintained per session, and a "Start New Chat" action is available in the UI.
+This app provides a working RAG (Retrieval-Augmented Generation) chatbot over Confluence using a vector store (FAISS) and Chainlit UI. It supports configurable OpenAI-compatible LLMs and Confluence, plus shared proxy and SSL options. Chat history is maintained per session, and a "Start New Chat" action is available in the UI.
 
 Features
 --------
 - Confluence search across all spaces via CQL, fetch and index matching pages on demand.
-- Vector store backed by Chroma with persistent storage (`.chroma/`).
+- Vector store backed by FAISS with persistent storage (`.faiss/` by default).
 - OpenAI-compatible LLM and embeddings with configurable `base_url`, `model`, `embeddings_model`.
 - Shared `PROXY_URL` and `DISABLE_SSL` applied to both LLM and Confluence requests.
 - Chainlit UI with per-session chat history and a "Start New Chat" action.
@@ -55,7 +55,7 @@ Networking:
 - `DISABLE_SSL`: `true`/`false`. If `true`, SSL verification is disabled for both clients (use only if you know what you're doing).
 
 RAG options (optional):
-- `CHROMA_DIR`: Folder to persist the Chroma DB (default: `.chroma`).
+- `FAISS_DIR`: Folder to persist the FAISS index (default: `.faiss`). If not set, the app will fall back to `CHROMA_DIR` or `.faiss`.
 - `MAX_CONFLUENCE_RESULTS`: Max pages from CQL search to index per query (default: `25`).
 - `CHUNK_SIZE`: Characters per chunk (default: `1200`).
 - `CHUNK_OVERLAP`: Overlap between chunks (default: `150`).
@@ -64,15 +64,16 @@ RAG options (optional):
 How it works
 ------------
 - On each question, the app searches Confluence across all spaces using CQL for relevant pages.
-- It fetches those pages' storage format, converts to text, chunks them, and upserts into Chroma.
+- It fetches those pages' storage format, converts to text, chunks them, and upserts into a FAISS index.
 - It then performs vector similarity search over the index, builds a context, and asks the LLM to answer.
 - The UI maintains chat history for context continuity and offers a "Start New Chat" action to clear history.
 
 Notes
 -----
 - If your Confluence base URL already ends with `/wiki`, it is respected. Otherwise the app targets `/wiki/rest/api` by default.
-- The app uses Chroma’s local persistent client. The `.chroma/` directory will be created in the project root.
+- The app uses a local persistent FAISS index. The `.faiss/` directory will be created in the project root (configurable via `FAISS_DIR`).
 - The built-in Chainlit "New chat" button also restarts the session; the action button in the chat is provided for convenience.
+- To see the Conversations (history) icon in the header, ensure Chainlit has a database configured. For local dev, you can set `CHAINLIT_DB_URL=sqlite:///./chainlit.db` before running `chainlit run ...`. The included `.chainlit/config.toml` attempts to order header buttons with Conversations after New Chat when supported by your Chainlit version.
 
 Troubleshooting
 ---------------

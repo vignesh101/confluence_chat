@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Tuple
 from config import Settings
 from confluence_client import ConfluenceClient
 from llm import LLMClient
-from vector_store import ChromaVectorStore
+from vector_store import FaissVectorStore
 
 
 @dataclass
@@ -37,7 +37,7 @@ class RAGPipeline:
     def __init__(self, cfg: Settings):
         self.cfg = cfg
         self.llm = LLMClient(cfg)
-        self.store = ChromaVectorStore(cfg, self.llm)
+        self.store = FaissVectorStore(cfg, self.llm)
         self.confluence = ConfluenceClient(cfg)
 
     def _ensure_pages_indexed(self, pages: List[Dict[str, Any]]):
@@ -102,4 +102,3 @@ class RAGPipeline:
         msgs = self.build_prompt(query, history, contexts)
         answer = self.llm.chat(msgs)
         return answer, contexts
-

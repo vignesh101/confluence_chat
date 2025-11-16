@@ -26,8 +26,9 @@ class Settings(BaseModel):
     # Optional username for Basic auth (useful for Confluence Data Center)
     confluence_username: str | None = Field(default_factory=lambda: os.getenv("CONFLUENCE_USERNAME"))
 
-    # Vector DB
-    chroma_persist_dir: str = Field(default_factory=lambda: os.getenv("CHROMA_DIR", ".chroma"))
+    # Vector store
+    # Prefer FAISS. If FAISS_DIR not set, fallback to CHROMA_DIR for backward-compatible path.
+    faiss_dir: str = Field(default_factory=lambda: os.getenv("FAISS_DIR", os.getenv("CHROMA_DIR", ".faiss")))
 
     # RAG params
     max_confluence_search_results: int = Field(default_factory=lambda: int(os.getenv("MAX_CONFLUENCE_RESULTS", "25")))

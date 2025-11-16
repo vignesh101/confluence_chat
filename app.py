@@ -78,19 +78,13 @@ async def on_message(message: cl.Message):
     history.append({"role": "user", "content": message.content, "is_user": True})
     cl.user_session.set("history", history)
 
-    # Stream a placeholder while we compute
-    msg = cl.Message(content="Thinking...")
-    await msg.send()
-
     try:
         answer, contexts = await cl.make_async(rag.answer)(message.content, history)
         sources_block = _format_sources(contexts)
         final = answer + (f"\n\n{sources_block}" if sources_block else "")
-        msg.content = final
-        await msg.update()
+        await cl.Message(content=final).send()
         # Append assistant response for continuity
         history.append({"role": "assistant", "content": answer})
         cl.user_session.set("history", history)
     except Exception as e:
-        msg.content = f"Error: {e}"
-        await msg.update()
+        await cl.Message(content=f"Error: {e}").send()

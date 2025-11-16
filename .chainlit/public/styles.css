@@ -1,0 +1,26 @@
+/* Gentle UI adjustments for Chainlit */
+
+/* Add bottom padding so floating buttons don’t overlap content */
+[data-testid="messages-container"],
+.cl-message-list,
+.messages-container {
+  padding-bottom: 72px !important;
+}
+
+/* Reposition scroll-to-bottom bubble safely to bottom-right */
+button[data-testid="scroll-to-bottom"],
+.scroll-to-bottom,
+[aria-label="Scroll to bottom"] {
+  position: fixed !important;
+  right: 16px !important;
+  bottom: 16px !important;
+  z-index: 1000 !important;
+}
+
+/* Avoid inner scroll areas within message content when long */
+.cl-message-content,
+.message-content {
+  overflow: visible !important;
+  max-height: none !important;
+}
+

@@ -135,12 +135,12 @@ class ConfluenceClient:
         # Optional space filters
         spaces = getattr(self.cfg, "confluence_spaces", None)
         if spaces:
-            items = ", ".join([f"'{s.replace("'", "\\'")}'" for s in spaces])
+            items = ", ".join(["'" + s.replace("'", "\\'") + "'" for s in spaces])
             cql_filters.append(f"space in ({items})")
         # Optional label filters
         labels = getattr(self.cfg, "confluence_labels", None)
         if labels:
-            items = ", ".join([f"'{s.replace("'", "\\'")}'" for s in labels])
+            items = ", ".join(["'" + s.replace("'", "\\'") + "'" for s in labels])
             cql_filters.append(f"label in ({items})")
         cql = " AND ".join(cql_filters) + " ORDER BY lastmodified DESC"
         self.last_cql = cql

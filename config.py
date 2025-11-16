@@ -51,3 +51,7 @@ class Settings(BaseModel):
 
 def load_settings() -> Settings:
     return Settings()
+
+
+# Global settings instance for convenience
+settings = load_settings()

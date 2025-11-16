@@ -1,103 +1,307 @@
-Confluence RAG with Chainlit
-================================
+# Confluence Chat - Professional React UI
 
-This app provides a working RAG (Retrieval-Augmented Generation) chatbot over Confluence using a vector store (FAISS) and Chainlit UI. It supports configurable OpenAI-compatible LLMs and Confluence, plus shared proxy and SSL options. Chat history is maintained per session, and a "Start New Chat" action is available in the UI.
+A modern, industry-standard RAG (Retrieval-Augmented Generation) chatbot for Confluence with a professional React-based user interface. Features real-time streaming responses, conversation management, source citations, and dark mode support.
 
-Features
---------
-- Confluence search across all spaces via CQL, fetch and index matching pages on demand.
-- Vector store backed by FAISS with persistent storage (`.faiss/` by default).
-- OpenAI-compatible LLM and embeddings with configurable `base_url`, `model`, `embeddings_model`.
-- Shared `PROXY_URL` and `DISABLE_SSL` applied to both LLM and Confluence requests.
-- Chainlit UI with per-session chat history and a "Start New Chat" action.
- - Quality-focused retrieval: optional multi-query expansion, MMR diversity, per-page chunk caps, and context budget to improve answer relevance and readability.
+## Features
 
-Quickstart
-----------
-1) Install dependencies
+### Chat Interface
+- **Professional React UI** with TypeScript and Tailwind CSS
+- **Real-time streaming responses** via WebSocket for instant feedback
+- **Markdown rendering** with syntax highlighting for code blocks
+- **Dark/Light mode** support with system preference detection
+- **Responsive design** that works on desktop and mobile
+- **Source citations** with clickable links to Confluence pages
+- **Query debug information** showing retrieval details (optional)
+
+### Conversation Management
+- **Persistent conversation history** with SQLite storage
+- **Sidebar navigation** for browsing past conversations
+- **Search conversations** by title
+- **Rename and delete** conversations
+- **Auto-generated titles** from first user message
+
+### RAG Pipeline
+- **Smart Confluence search** using CQL across all spaces
+- **Vector similarity search** with FAISS for fast retrieval
+- **Multi-query expansion** for improved recall
+- **MMR (Maximal Marginal Relevance)** selection for diverse results
+- **Per-page chunk caps** to reduce redundancy
+- **Context budget enforcement** to optimize prompt size
+- **Inline citations** with numbered references
+
+## Architecture
 
 ```
+┌─────────────┐     WebSocket      ┌─────────────┐
+│  React UI   │ ◄─────────────────►│   FastAPI   │
+│  (TypeScript)│                    │   Backend   │
+└─────────────┘                    └─────────────┘
+                                          │
+                                          ▼
+                               ┌─────────────────────┐
+                               │    RAG Pipeline     │
+                               ├─────────────────────┤
+                               │ • Confluence Client │
+                               │ • FAISS Vector Store│
+                               │ • LLM Client        │
+                               │ • SQLite DB         │
+                               └─────────────────────┘
+```
+
+## Quick Start
+
+### 1. Install Python Dependencies
+
+```bash
 pip install -r requirements.txt
 ```
 
-2) Set environment variables (see below). You can copy `.env.example` to `.env` and fill values:
+### 2. Install Frontend Dependencies
 
+```bash
+cd frontend
+npm install
+cd ..
 ```
+
+### 3. Configure Environment Variables
+
+Copy the example environment file and edit with your settings:
+
+```bash
 cp .env.example .env
 ```
 
-3) Run the app
+Required variables:
+- `API_KEY` - Your OpenAI API key (or compatible provider)
+- `CONFLUENCE_BASE_URL` - Your Confluence instance URL
+- `CONFLUENCE_ACCESS_TOKEN` - Confluence API token
 
+### 4. Run the Application
+
+**Development mode (recommended for development):**
+
+```bash
+python run.py
 ```
-chainlit run app.py -w
+
+This starts both:
+- Backend API: http://localhost:8000
+- Frontend: http://localhost:3000
+
+**Or run separately:**
+
+Backend:
+```bash
+uvicorn api:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-Open the provided local URL to chat.
+Frontend:
+```bash
+cd frontend
+npm run dev
+```
 
-Configuration (env vars)
-------------------------
+### 5. Production Build
 
-LLM / OpenAI-compatible:
-- `OPENAPI_BASE_URL` (or `OPENAI_BASE_URL`): Base URL for your OpenAI-compatible endpoint (e.g., `https://api.openai.com/v1` or your proxy/vLLM/Azure endpoint).
-- `API_KEY`: API key for the LLM provider.
-- `MODEL_NAME`: Chat model name (e.g., `gpt-4o-mini`).
-- `EMBEDDINGS_MODEL_NAME`: Embeddings model (e.g., `text-embedding-3-small`).
-- `TEMPERATURE`: Chat generation temperature (default: `0.2`).
+Build the frontend for production:
 
- Confluence:
- - `CONFLUENCE_BASE_URL`: Base URL to your Confluence (e.g., `https://your-domain.atlassian.net/wiki`).
- - `CONFLUENCE_ACCESS_TOKEN`: Confluence token.
-   - Cloud: Either set `CONFLUENCE_EMAIL` + API token, or put `email:apitoken` directly into `CONFLUENCE_ACCESS_TOKEN` (so you only set two vars: base URL and token).
-   - Data Center: Use a PAT as Bearer (no email/username needed), or `CONFLUENCE_USERNAME` + password/PAT for Basic.
- - `CONFLUENCE_EMAIL` (optional): Email for Basic auth (typical for Confluence Cloud API tokens).
- - `CONFLUENCE_USERNAME` (optional): Username for Basic auth (useful for Confluence Data Center when using username + PAT/password).
+```bash
+cd frontend
+npm run build
+```
 
- Networking:
-- `PROXY_URL`: HTTP(S) proxy URL applied to both LLM and Confluence clients. Example: `http://user:pass@proxy.yourco.local:8080`.
-- `DISABLE_SSL`: `true`/`false`. If `true`, SSL verification is disabled for both clients (use only if you know what you're doing).
+Then run only the backend, which will serve the built React app:
 
-RAG options (optional):
-- `FAISS_DIR`: Folder to persist the FAISS index (default: `.faiss`). If not set, the app will fall back to `CHROMA_DIR` or `.faiss`.
-- `MAX_CONFLUENCE_RESULTS`: Max pages from CQL search to index per query (default: `25`).
-- `CHUNK_SIZE`: Characters per chunk (default: `1200`).
-- `CHUNK_OVERLAP`: Overlap between chunks (default: `150`).
-- `TOP_K`: Number of chunks to retrieve for context (default: `6`).
-- `MAX_CHUNKS_PER_PAGE`: Limit chunks per Confluence page in final context (default: `2`). Helps reduce redundancy.
-- `MAX_CONTEXT_CHARS`: Max total characters to include from retrieved chunks in the prompt (default: `12000`). Prevents overly long prompts.
-- `USE_MULTI_QUERY`: If `true`, generate alternative query phrasings to broaden recall (default: `true`).
-- `NUM_QUERY_VARIANTS`: Number of alternative phrasings to generate (default: `2`).
-- `RETRIEVAL_POOL_FACTOR`: Retrieve `TOP_K * factor` candidates before MMR selection (default: `4`).
-- `MMR_LAMBDA`: Trade-off for MMR (0..1). Higher favors similarity, lower favors diversity (default: `0.5`).
-- `MAX_HISTORY_TURNS`: Number of recent messages to keep in prompt (default: `10`).
-- `SHOW_QUERY_DETAILS`: If `true`, append a collapsible block with query analysis (intent/entities/timeframe), query expansion, CQL used, candidate stats, and selected items (default: `false`).
+```bash
+uvicorn api:app --host 0.0.0.0 --port 8000
+```
 
-Confluence filters (optional):
-- `CONFLUENCE_SPACES`: Comma-separated list of space keys to search (e.g., `ENG,HR,PROD`).
-- `CONFLUENCE_LABELS`: Comma-separated labels to require (e.g., `policy,architecture`).
+Access at http://localhost:8000
 
-How it works
-------------
-- On each question, the app searches Confluence across all spaces using CQL for relevant pages.
-- It fetches those pages' storage format, converts to text, chunks them, and upserts into a FAISS index.
-- It then performs vector similarity search over the index, optionally expands the query into variants, and collects a larger candidate pool.
-- A Maximal Marginal Relevance (MMR) step selects the final set of chunks, enforcing a per-page cap and a prompt-size budget, to improve diversity and reduce redundancy.
-- The LLM answers with inline citations like `[1]` that correspond to the numbered context entries. The UI also lists source links at the end.
-- The UI maintains chat history for context continuity and offers a "Start New Chat" action to clear history.
+## Configuration
 
-Notes
------
-- If your Confluence base URL already ends with `/wiki`, it is respected. Otherwise the app targets `/wiki/rest/api` by default.
-- The app uses a local persistent FAISS index. The `.faiss/` directory will be created in the project root (configurable via `FAISS_DIR`).
-- The built-in Chainlit "New chat" button also restarts the session; the action button in the chat is provided for convenience.
-- To see the Conversations (history) icon in the header, ensure Chainlit has a database configured. For local dev, you can set `CHAINLIT_DB_URL=sqlite:///./chainlit.db` before running `chainlit run ...`. The included `.chainlit/config.toml` attempts to order header buttons with Conversations after New Chat when supported by your Chainlit version.
+### Environment Variables
 
-Troubleshooting
----------------
-- 401/403 from Confluence: Verify `CONFLUENCE_ACCESS_TOKEN` and that it’s a valid PAT with appropriate permissions.
-- 302 redirect to `/login.action`: This usually means the REST base URL or auth method is wrong for your site.
-  - For Confluence Cloud, use `CONFLUENCE_BASE_URL=https://<your-domain>.atlassian.net/wiki` and set `CONFLUENCE_EMAIL` + `CONFLUENCE_ACCESS_TOKEN` (API token).
-  - For Data Center, set `CONFLUENCE_BASE_URL` to your site root (e.g., `https://confluence.yourco.local` or `https://confluence.yourco.local/confluence`). Provide either `CONFLUENCE_USERNAME` + `CONFLUENCE_ACCESS_TOKEN` (password or PAT) for Basic auth, or a valid PAT via Bearer.
-  - The client now auto-detects between `/rest/api` and `/wiki/rest/api`, but a misconfigured base or invalid credentials can still cause login redirects.
-- SSL errors: Set `DISABLE_SSL=true` or provide a proxy that performs TLS termination. Use only when acceptable in your environment.
-- Proxy issues: Ensure `PROXY_URL` is reachable. Both LLM and Confluence HTTP clients use it.
-- Model or embeddings errors: Ensure `MODEL_NAME` and `EMBEDDINGS_MODEL_NAME` are supported by your LLM endpoint.
+#### LLM / OpenAI-Compatible
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `OPENAI_BASE_URL` | Base URL for OpenAI-compatible API | OpenAI default |
+| `API_KEY` | API key for the LLM provider | **Required** |
+| `MODEL_NAME` | Chat model name | `gpt-4o-mini` |
+| `EMBEDDINGS_MODEL_NAME` | Embeddings model | `text-embedding-3-small` |
+| `TEMPERATURE` | Generation temperature | `0.2` |
+
+#### Confluence
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `CONFLUENCE_BASE_URL` | Base URL for Confluence | **Required** |
+| `CONFLUENCE_ACCESS_TOKEN` | API token (or `email:token` format) | **Required** |
+| `CONFLUENCE_EMAIL` | Email for Basic auth (Cloud) | Optional |
+| `CONFLUENCE_USERNAME` | Username for Basic auth (Data Center) | Optional |
+| `CONFLUENCE_SPACES` | Comma-separated space keys to search | All spaces |
+| `CONFLUENCE_LABELS` | Comma-separated required labels | None |
+
+#### Networking
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `PROXY_URL` | HTTP(S) proxy URL | None |
+| `DISABLE_SSL` | Disable SSL verification | `false` |
+
+#### RAG Options
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `FAISS_DIR` | Directory for FAISS index | `.faiss` |
+| `CHUNK_SIZE` | Characters per chunk | `1500` |
+| `CHUNK_OVERLAP` | Overlap between chunks | `200` |
+| `TOP_K` | Chunks to retrieve | `8` |
+| `MAX_CHUNKS_PER_PAGE` | Max chunks per page in context | `3` |
+| `MAX_CONTEXT_CHARS` | Max total context characters | `16000` |
+| `USE_MULTI_QUERY` | Enable query expansion | `true` |
+| `NUM_QUERY_VARIANTS` | Number of query variants | `3` |
+| `MMR_LAMBDA` | MMR diversity factor (0-1) | `0.6` |
+| `MAX_HISTORY_TURNS` | Conversation history length | `10` |
+| `SHOW_QUERY_DETAILS` | Show retrieval debug info | `false` |
+| `MAX_CONFLUENCE_SEARCH_RESULTS` | Max pages to search | `30` |
+
+## UI Features
+
+### Chat Interface
+- **Type your question** in the input area at the bottom
+- **Press Enter** to send (Shift+Enter for new line)
+- **Real-time streaming** shows the response as it generates
+- **Copy button** to copy assistant responses
+- **Expandable debug info** when `SHOW_QUERY_DETAILS=true`
+
+### Sidebar
+- **New Conversation** button to start fresh
+- **Search** to filter conversations by title
+- **Click** to load a conversation
+- **Hover** to see edit/delete options
+- **Collapse** sidebar with the arrow button
+
+### Theme Switcher
+- Click the sun/moon icon in the header
+- Choose Light, Dark, or System preference
+
+## API Endpoints
+
+### REST API
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/health` | Health check |
+| `POST` | `/api/conversations` | Create conversation |
+| `GET` | `/api/conversations` | List all conversations |
+| `GET` | `/api/conversations/{id}/messages` | Get conversation messages |
+| `PUT` | `/api/conversations/{id}` | Update conversation title |
+| `DELETE` | `/api/conversations/{id}` | Delete conversation |
+
+### WebSocket
+
+| Endpoint | Description |
+|----------|-------------|
+| `ws://host/ws/chat` | Real-time chat with streaming |
+
+Message format:
+```json
+{
+  "conversation_id": 1,
+  "content": "How do I deploy?",
+  "history": [{"role": "user", "content": "..."}, ...]
+}
+```
+
+Response types:
+- `status` - Progress updates
+- `token` - Streamed response tokens
+- `sources` - Source citations
+- `debug` - Query debug information
+- `complete` - Response complete
+- `error` - Error message
+
+## Technology Stack
+
+### Backend
+- **FastAPI** - Modern async Python web framework
+- **WebSocket** - Real-time bidirectional communication
+- **FAISS** - Efficient vector similarity search
+- **SQLite** - Lightweight conversation persistence
+- **OpenAI Python SDK** - LLM client with streaming support
+- **Pydantic** - Data validation and settings management
+
+### Frontend
+- **React 18** - UI library with hooks
+- **TypeScript** - Type-safe JavaScript
+- **Vite** - Fast build tool and dev server
+- **Tailwind CSS** - Utility-first styling
+- **React Markdown** - Markdown rendering with GFM support
+- **Highlight.js** - Syntax highlighting
+- **Lucide React** - Beautiful icons
+- **date-fns** - Date formatting
+
+## Troubleshooting
+
+### Connection Issues
+- **WebSocket disconnected**: Check if the backend is running
+- **CORS errors**: The backend allows all origins in development
+- **Proxy issues**: Ensure `PROXY_URL` is reachable
+
+### Confluence Issues
+- **401/403**: Check your `CONFLUENCE_ACCESS_TOKEN`
+- **302 redirect**: Wrong base URL or auth method
+- **No results**: Check `CONFLUENCE_SPACES` filter or search terms
+
+### Performance Issues
+- **Slow responses**: Reduce `MAX_CONFLUENCE_SEARCH_RESULTS` or `TOP_K`
+- **Memory usage**: FAISS index grows with indexed content
+- **Token limits**: Adjust `MAX_CONTEXT_CHARS` for your model
+
+## Development
+
+### Frontend Development
+
+```bash
+cd frontend
+npm run dev      # Start dev server with hot reload
+npm run build    # Build for production
+npm run lint     # Run ESLint
+npm run preview  # Preview production build
+```
+
+### Backend Development
+
+```bash
+uvicorn api:app --reload  # Auto-reload on code changes
+```
+
+### Adding Features
+
+The codebase is modular:
+- `api.py` - FastAPI routes and WebSocket handler
+- `rag.py` - RAG pipeline logic
+- `confluence_client.py` - Confluence API integration
+- `vector_store.py` - FAISS vector store wrapper
+- `llm.py` - LLM client wrapper
+- `conversation_db.py` - SQLite conversation storage
+- `frontend/src/` - React components and hooks
+
+## Migration from Chainlit
+
+This version replaces the Chainlit UI with a custom React application. Key differences:
+
+1. **No Chainlit dependency** - Uses FastAPI + React instead
+2. **WebSocket streaming** - Direct control over response streaming
+3. **Custom UI** - Full control over appearance and behavior
+4. **Conversation management** - Built-in sidebar with search/rename/delete
+5. **Theme support** - Dark/light mode with system preference detection
+
+The RAG pipeline, Confluence integration, and conversation database remain the same.
+
+## License
+
+MIT License

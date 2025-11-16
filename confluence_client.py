@@ -89,7 +89,8 @@ class ConfluenceClient:
         # Remove code macro metadata and unwanted tags
         soup = BeautifulSoup(storage_html, "html.parser")
         # Replace <ac:structured-macro> etc. with their text
-        for macro in soup.find_all(re.compile(r"^(ac:|ri:)"):  # Namespace tags
+        # Match namespaced Confluence tags like ac:* and ri:* and unwrap them
+        for macro in soup.find_all(re.compile(r"^(ac:|ri:)") ):  # Namespace tags
             macro.unwrap()
         text = soup.get_text("\n")
         # Normalize whitespace

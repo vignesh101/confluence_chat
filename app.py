@@ -115,17 +115,62 @@ async def on_message(message: cl.Message):
     cl.user_session.set("history", history)
 
     try:
-        answer, contexts, dbg = await cl.make_async(rag.answer)(message.content, history)
+        # Live status message for real-time progress
+        status = cl.Message(content="🔎 Searching Confluence…")
+        await status.send()
+
+        # 1) Search pages
+        pages = await cl.make_async(rag.confluence.search_pages)(
+            message.content, limit=rag.cfg.max_confluence_search_results
+        )
+        await status.update(content=f"🔎 Found {len(pages)} pages. Indexing content…")
+
+        # 2) Ensure pages are indexed into vector store
+        if pages:
+            await cl.make_async(rag._ensure_pages_indexed)(pages)  # type: ignore[attr-defined]
+
+        # 3) Expand queries (optional)
+        queries = await cl.make_async(rag._expand_queries)(message.content)  # type: ignore[attr-defined]
+        if len(queries) > 1:
+            await status.update(content=f"🧭 Expanded to {len(queries)} queries. Retrieving candidates…")
+        else:
+            await status.update(content="🧭 Using original query. Retrieving candidates…")
+
+        # 4) Retrieve and select context (includes MMR & budget)
+        contexts, dbg = await cl.make_async(rag.retrieve)(message.content)
+        await status.update(content=f"📚 Selected {len(contexts)} context chunks. Building prompt…")
+
+        # 5) Build prompt
+        msgs = rag.build_prompt(message.content, history, contexts)
+        await status.update(content="✍️ Generating answer…")
+
+        # 6) Stream the final answer tokens
+        answer_msg = cl.Message(content="")
+        await answer_msg.send()
+        answer_text = ""
+        for token in rag.llm.chat_stream(msgs, temperature=rag.cfg.temperature):
+            answer_text += token
+            await answer_msg.stream_token(token)
+
+        # 7) Append sources and optional details
         sources_block = _format_sources(contexts)
         details_block = _format_query_details(dbg) if getattr(rag.cfg, "show_query_details", False) else ""
-        final = answer
+        final = answer_text
         if sources_block:
             final += f"\n\n{sources_block}"
         if details_block:
             final += f"\n\n{details_block}"
-        await cl.Message(content=final).send()
+        await answer_msg.update(content=final)
+
+        # Done
+        await status.update(content="✅ Done")
+
         # Append assistant response for continuity
-        history.append({"role": "assistant", "content": answer})
+        history.append({"role": "assistant", "content": answer_text})
         cl.user_session.set("history", history)
     except Exception as e:
+        try:
+            await status.update(content=f"❌ Error: {e}")  # type: ignore[has-type]
+        except Exception:
+            pass
         await cl.Message(content=f"Error: {e}").send()

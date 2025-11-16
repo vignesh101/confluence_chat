@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Iterable, List
+from typing import Iterable, List, Generator
 
 import httpx
 from openai import OpenAI
@@ -43,3 +43,20 @@ class LLMClient:
             temperature=temperature,
         )
         return (res.choices[0].message.content or "").strip()
+
+    def chat_stream(self, messages: List[dict], temperature: float = 0.2) -> Generator[str, None, None]:
+        # Yields content tokens as they arrive from the LLM
+        stream = self.client.chat.completions.create(
+            model=self.cfg.model_name,
+            messages=messages,
+            temperature=temperature,
+            stream=True,
+        )
+        for chunk in stream:
+            try:
+                delta = chunk.choices[0].delta
+                if getattr(delta, "content", None):
+                    yield delta.content  # type: ignore[generator-type]
+            except Exception:
+                # Ignore malformed chunks
+                continue

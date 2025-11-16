@@ -20,9 +20,11 @@ def _l2_normalize(v: np.ndarray) -> np.ndarray:
 
 
 def _hash_id_to_int64(s: str) -> int:
-    # Stable 64-bit ID from string
+    # Stable 63-bit non-negative ID from string to avoid signed 64-bit overflow
+    # Some native libs expect signed int64; keep IDs within [0, 2^63-1].
     h = hashlib.sha1(s.encode("utf-8")).digest()  # 20 bytes
-    return int.from_bytes(h[:8], byteorder="big", signed=False)
+    v = int.from_bytes(h[:8], byteorder="big", signed=False)
+    return v & ((1 << 63) - 1)
 
 
 class FaissVectorStore:

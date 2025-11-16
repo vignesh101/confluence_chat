@@ -23,6 +23,8 @@ class Settings(BaseModel):
     confluence_base_url: str | None = Field(default_factory=lambda: os.getenv("CONFLUENCE_BASE_URL"))
     confluence_access_token: str | None = Field(default_factory=lambda: os.getenv("CONFLUENCE_ACCESS_TOKEN"))
     confluence_email: str | None = Field(default_factory=lambda: os.getenv("CONFLUENCE_EMAIL"))
+    # Optional username for Basic auth (useful for Confluence Data Center)
+    confluence_username: str | None = Field(default_factory=lambda: os.getenv("CONFLUENCE_USERNAME"))
 
     # Vector DB
     chroma_persist_dir: str = Field(default_factory=lambda: os.getenv("CHROMA_DIR", ".chroma"))

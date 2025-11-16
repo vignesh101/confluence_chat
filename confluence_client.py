@@ -18,19 +18,30 @@ class ConfluenceClient:
 
         base_url = cfg.confluence_base_url.rstrip("/")
 
-        # Confluence Cloud typically uses /wiki prefix for REST routes; allow either form
-        self.api_base = f"{base_url}/rest/api" if base_url.endswith("/wiki") else f"{base_url}/wiki/rest/api"
-
         proxies = None
         if cfg.proxy_url:
             proxies = {"http://": cfg.proxy_url, "https://": cfg.proxy_url}
-        headers = {"Accept": "application/json"}
-        auth = None
-        # Prefer Basic auth if email provided (typical for Confluence Cloud API tokens)
+
+        headers = {
+            "Accept": "application/json",
+        }
+        auth: Optional[Tuple[str, str]] = None
+        # Prefer Basic auth if email or username provided
         if cfg.confluence_email:
             auth = (cfg.confluence_email, cfg.confluence_access_token)  # type: ignore[assignment]
+        elif cfg.confluence_username:
+            auth = (cfg.confluence_username, cfg.confluence_access_token)  # type: ignore[assignment]
+        elif ":" in (cfg.confluence_access_token or ""):
+            # Allow providing "email:token" as the access token to avoid a separate email var
+            user, tok = (cfg.confluence_access_token or "").split(":", 1)
+            auth = (user, tok)  # type: ignore[assignment]
         else:
+            # Fallback to Bearer (Data Center PATs)
             headers["Authorization"] = f"Bearer {cfg.confluence_access_token}"
+
+        # Discover a working REST API base to avoid 302 to /login.action
+        api_base = self._discover_api_base(base_url, headers, auth, proxies, not cfg.disable_ssl)
+        self.api_base = api_base
 
         self.client = httpx.Client(
             base_url=self.api_base,
@@ -39,10 +50,70 @@ class ConfluenceClient:
             verify=not cfg.disable_ssl,
             proxies=proxies,
             timeout=httpx.Timeout(30.0, connect=30.0, read=30.0),
+            follow_redirects=False,
         )
 
-        # Keep full site base to craft page URLs
-        self.site_base = base_url if base_url.endswith("/wiki") else f"{base_url}/wiki"
+        # Keep full site base to craft page URLs based on detected API base
+        # If API base is .../X/rest/api then site base is .../X
+        if self.api_base.endswith("/rest/api"):
+            self.site_base = self.api_base[: -len("/rest/api")]  # strip suffix
+        else:
+            self.site_base = base_url
+
+    def _discover_api_base(
+        self,
+        base_url: str,
+        headers: Dict[str, str],
+        auth: Optional[Tuple[str, str]],
+        proxies: Optional[Dict[str, str]],
+        verify: bool,
+    ) -> str:
+        # If user already points to a REST API base, respect it
+        if base_url.endswith("/rest/api"):
+            return base_url
+
+        candidates: List[str] = []
+        # Common forms across Cloud and Data Center
+        candidates.append(f"{base_url}/rest/api")
+        candidates.append(f"{base_url}/wiki/rest/api")
+
+        # Try each candidate with a lightweight call that exists on all editions
+        tmp = httpx.Client(headers=headers, auth=auth, verify=verify, proxies=proxies, timeout=10.0, follow_redirects=False)
+        try:
+            for cand in candidates:
+                try:
+                    r = tmp.get(f"{cand}/space", params={"limit": 1})
+                    # Avoid login redirects which show up as 302 to /login.action
+                    if r.is_redirect:
+                        loc = r.headers.get("Location", "")
+                        if "login.action" in loc or "/login" in loc:
+                            continue
+                    # Consider 200/401/403 as acceptable indicators that the endpoint exists
+                    if r.status_code in (200, 401, 403):
+                        return cand
+                except httpx.HTTPError:
+                    continue
+        finally:
+            tmp.close()
+
+        # Heuristic fallback if nothing matched
+        # Cloud domains typically use /wiki/rest/api
+        if ".atlassian.net" in base_url:
+            return f"{base_url}/wiki/rest/api"
+        # Otherwise default to /rest/api (Data Center)
+        return f"{base_url}/rest/api"
+
+    def _ensure_ok(self, r: httpx.Response):
+        if r.is_redirect:
+            loc = r.headers.get("Location", "")
+            if "login.action" in loc or "/login" in loc:
+                raise RuntimeError(
+                    f"Confluence redirected to login ({loc}). Check base URL and credentials. "
+                    f"If using Data Center, set CONFLUENCE_BASE_URL to your site root (e.g., https://host or https://host/confluence) "
+                    f"and use CONFLUENCE_USERNAME + CONFLUENCE_ACCESS_TOKEN or a valid PAT."
+                )
+            raise RuntimeError(f"Unexpected redirect {r.status_code} to {loc}")
+        r.raise_for_status()
 
     def _page_web_url(self, page: Dict[str, Any]) -> str:
         # Prefer _links.webui if present
@@ -60,7 +131,7 @@ class ConfluenceClient:
         cql = f"type = page AND (title ~ '{q}' OR text ~ '{q}') ORDER BY lastmodified DESC"
         params = {"cql": cql, "limit": min(limit, 100), "expand": "space,content.metadata"}
         r = self.client.get("/search", params=params)
-        r.raise_for_status()
+        self._ensure_ok(r)
         data = r.json()
         results = data.get("results", [])
         pages: List[Dict[str, Any]] = []
@@ -80,7 +151,7 @@ class ConfluenceClient:
 
     def get_page_storage(self, page_id: str) -> Dict[str, Any]:
         r = self.client.get(f"/content/{page_id}", params={"expand": "body.storage,space"})
-        r.raise_for_status()
+        self._ensure_ok(r)
         return r.json()
 
     @staticmethod

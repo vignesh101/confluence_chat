@@ -42,10 +42,13 @@ LLM / OpenAI-compatible:
 - `MODEL_NAME`: Chat model name (e.g., `gpt-4o-mini`).
 - `EMBEDDINGS_MODEL_NAME`: Embeddings model (e.g., `text-embedding-3-small`).
 
-Confluence:
-- `CONFLUENCE_BASE_URL`: Base URL to your Confluence (e.g., `https://your-domain.atlassian.net/wiki`).
-- `CONFLUENCE_ACCESS_TOKEN`: Confluence API token. For Confluence Cloud API tokens, also set `CONFLUENCE_EMAIL` to use Basic auth automatically. For Data Center PATs, Bearer auth is used by default.
-- `CONFLUENCE_EMAIL` (optional): Email for Basic auth (typical for Confluence Cloud API tokens).
+ Confluence:
+ - `CONFLUENCE_BASE_URL`: Base URL to your Confluence (e.g., `https://your-domain.atlassian.net/wiki`).
+ - `CONFLUENCE_ACCESS_TOKEN`: Confluence token.
+   - Cloud: Either set `CONFLUENCE_EMAIL` + API token, or put `email:apitoken` directly into `CONFLUENCE_ACCESS_TOKEN` (so you only set two vars: base URL and token).
+   - Data Center: Use a PAT as Bearer (no email/username needed), or `CONFLUENCE_USERNAME` + password/PAT for Basic.
+ - `CONFLUENCE_EMAIL` (optional): Email for Basic auth (typical for Confluence Cloud API tokens).
+ - `CONFLUENCE_USERNAME` (optional): Username for Basic auth (useful for Confluence Data Center when using username + PAT/password).
 
 Networking:
 - `PROXY_URL`: HTTP(S) proxy URL applied to both LLM and Confluence clients. Example: `http://user:pass@proxy.yourco.local:8080`.
@@ -74,6 +77,10 @@ Notes
 Troubleshooting
 ---------------
 - 401/403 from Confluence: Verify `CONFLUENCE_ACCESS_TOKEN` and that it’s a valid PAT with appropriate permissions.
+- 302 redirect to `/login.action`: This usually means the REST base URL or auth method is wrong for your site.
+  - For Confluence Cloud, use `CONFLUENCE_BASE_URL=https://<your-domain>.atlassian.net/wiki` and set `CONFLUENCE_EMAIL` + `CONFLUENCE_ACCESS_TOKEN` (API token).
+  - For Data Center, set `CONFLUENCE_BASE_URL` to your site root (e.g., `https://confluence.yourco.local` or `https://confluence.yourco.local/confluence`). Provide either `CONFLUENCE_USERNAME` + `CONFLUENCE_ACCESS_TOKEN` (password or PAT) for Basic auth, or a valid PAT via Bearer.
+  - The client now auto-detects between `/rest/api` and `/wiki/rest/api`, but a misconfigured base or invalid credentials can still cause login redirects.
 - SSL errors: Set `DISABLE_SSL=true` or provide a proxy that performs TLS termination. Use only when acceptable in your environment.
 - Proxy issues: Ensure `PROXY_URL` is reachable. Both LLM and Confluence HTTP clients use it.
 - Model or embeddings errors: Ensure `MODEL_NAME` and `EMBEDDINGS_MODEL_NAME` are supported by your LLM endpoint.

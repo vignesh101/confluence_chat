@@ -28,13 +28,20 @@ async def on_chat_start():
             "Use the 'Start New Chat' action below to clear this conversation."
         ),
         actions=[
-            cl.Action(name="new_chat", value="new", label="Start New Chat", description="Clear history and start fresh"),
+            # Include an explicit payload to satisfy Chainlit's Action schema in some versions
+            cl.Action(
+                name="new_chat",
+                value="new",
+                label="Start New Chat",
+                description="Clear history and start fresh",
+                payload={},
+            ),
         ],
     ).send()
 
 
 @cl.action_callback("new_chat")
-async def restart_chat(action: cl.Action):
+async def restart_chat(action=None):
     # Clear session history
     cl.user_session.set("history", [])
     await cl.Message(content="History cleared. You can start a new chat now.").send()
@@ -87,4 +94,3 @@ async def on_message(message: cl.Message):
     except Exception as e:
         msg.content = f"Error: {e}"
         await msg.update()
-

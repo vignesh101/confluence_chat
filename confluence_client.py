@@ -126,12 +126,55 @@ class ConfluenceClient:
         page_id = page.get("id")
         return f"{self.site_base}/pages/{page_id}"
 
+    def _extract_keywords(self, query: str) -> List[str]:
+        """Extract meaningful keywords from query for better CQL search."""
+        # Remove common stop words and extract key terms
+        stop_words = {
+            "a", "an", "the", "is", "are", "was", "were", "be", "been", "being",
+            "have", "has", "had", "do", "does", "did", "will", "would", "could",
+            "should", "may", "might", "must", "shall", "can", "need", "dare",
+            "ought", "used", "to", "of", "in", "for", "on", "with", "at", "by",
+            "from", "up", "about", "into", "over", "after", "beneath", "under",
+            "above", "what", "which", "who", "whom", "this", "that", "these",
+            "those", "am", "or", "and", "but", "if", "because", "as", "until",
+            "while", "although", "it", "its", "they", "them", "their", "we", "us",
+            "our", "you", "your", "he", "him", "his", "she", "her", "how", "when",
+            "where", "why", "all", "each", "every", "both", "few", "more", "most",
+            "other", "some", "such", "no", "not", "only", "same", "so", "than",
+            "too", "very", "just", "also", "any", "me", "my", "i", "get", "find",
+            "show", "tell", "give", "explain", "describe", "list", "provide"
+        }
+        # Split on non-alphanumeric characters
+        words = re.split(r"[^\w]+", query.lower())
+        # Filter out stop words and short words
+        keywords = [w for w in words if w and len(w) > 2 and w not in stop_words]
+        return keywords
+
     def search_pages(self, query: str, limit: int = 25) -> List[Dict[str, Any]]:
         # CQL search across all spaces and page types
         # Escaping single quotes in query for CQL
         q = query.replace("'", "\\'")
+
+        # Extract keywords for more precise search
+        keywords = self._extract_keywords(query)
+
         cql_filters: List[str] = ["type = page"]
-        cql_filters.append(f"(title ~ '{q}' OR text ~ '{q}')")
+
+        # Build search conditions - search for exact phrase and individual keywords
+        search_conditions: List[str] = []
+
+        # Add full query search (for phrase matching)
+        search_conditions.append(f"title ~ '{q}'")
+        search_conditions.append(f"text ~ '{q}'")
+
+        # Add individual keyword searches for better recall
+        for kw in keywords[:5]:  # Limit to top 5 keywords
+            kw_escaped = kw.replace("'", "\\'")
+            search_conditions.append(f"title ~ '{kw_escaped}'")
+            search_conditions.append(f"text ~ '{kw_escaped}'")
+
+        cql_filters.append(f"({' OR '.join(search_conditions)})")
+
         # Optional space filters
         spaces = getattr(self.cfg, "confluence_spaces", None)
         if spaces:
@@ -150,12 +193,17 @@ class ConfluenceClient:
         data = r.json()
         results = data.get("results", [])
         pages: List[Dict[str, Any]] = []
+        seen_ids = set()
         for it in results:
             content = it.get("content") or {}
             if content.get("type") != "page":
                 continue
+            page_id = content.get("id")
+            if page_id in seen_ids:
+                continue
+            seen_ids.add(page_id)
             page = {
-                "id": content.get("id"),
+                "id": page_id,
                 "title": content.get("title"),
                 "space": (content.get("space") or {}).get("key"),
                 "_links": content.get("_links") or it.get("_links", {}),

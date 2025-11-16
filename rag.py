@@ -45,11 +45,27 @@ def chunk_text(text: str, chunk_size: int, chunk_overlap: int) -> List[str]:
     while start < n:
         end = min(n, start + chunk_size)
         chunk = text[start:end]
-        chunks.append(chunk)
-        if end == n:
+
+        # Try to break at sentence boundaries for better context
+        if end < n:
+            # Look for sentence endings near the end
+            last_period = chunk.rfind(". ")
+            last_newline = chunk.rfind("\n")
+            last_question = chunk.rfind("? ")
+            last_exclaim = chunk.rfind("! ")
+
+            # Find the best break point (closest to end but still a sentence boundary)
+            break_points = [p for p in [last_period, last_newline, last_question, last_exclaim] if p > chunk_size * 0.6]
+            if break_points:
+                best_break = max(break_points)
+                chunk = text[start:start + best_break + 1].strip()
+                end = start + best_break + 1
+
+        chunks.append(chunk.strip())
+        if end >= n:
             break
         start = max(end - chunk_overlap, start + 1)
-    return chunks
+    return [c for c in chunks if c]  # Remove empty chunks
 
 
 class RAGPipeline:
@@ -297,21 +313,38 @@ class RAGPipeline:
 
     def build_prompt(self, query: str, history: List[Dict[str, str]], contexts: List[RetrievedChunk]) -> List[Dict[str, str]]:
         system = (
-            "You are a precise assistant answering with the provided Confluence context. "
-            "Use inline citations like [1], [2] that match the context list. "
-            "Cite after the statements they support. If context is insufficient, say so and suggest next steps. "
-            "Be concise, structured, and avoid speculation."
+            "You are a knowledgeable assistant that provides comprehensive and detailed answers based on Confluence documentation. "
+            "Your goal is to give users exact, actionable information from the source material.\n\n"
+            "Guidelines:\n"
+            "- Provide DETAILED and COMPLETE answers with specific information from the context\n"
+            "- Include exact steps, configurations, code examples, or procedures when available\n"
+            "- Use inline citations like [1], [2] that match the context list\n"
+            "- Cite immediately after each piece of information you reference\n"
+            "- Structure your response clearly with sections, bullet points, or numbered steps when appropriate\n"
+            "- If the context contains relevant details like version numbers, file paths, command examples, or configuration settings, include them\n"
+            "- If context is insufficient for a complete answer, clearly state what information is missing and suggest how to find it\n"
+            "- Do NOT summarize or oversimplify - provide the full details available in the context\n"
+            "- If multiple sources discuss the same topic, synthesize the information and cite all relevant sources"
         )
         ctx_block_lines: List[str] = []
         for i, c in enumerate(contexts, start=1):
             title = c.metadata.get("title") or "Untitled"
             url = c.metadata.get("url") or ""
-            ctx_block_lines.append(f"[{i}] {title} - {url}\n{c.text}")
-        ctx_block = "\n\n".join(ctx_block_lines) if ctx_block_lines else "(no context)"
+            space = c.metadata.get("space") or ""
+            header = f"[{i}] {title}"
+            if space:
+                header += f" (Space: {space})"
+            if url:
+                header += f"\nURL: {url}"
+            ctx_block_lines.append(f"{header}\n---\n{c.text}")
+        ctx_block = "\n\n".join(ctx_block_lines) if ctx_block_lines else "(no context found)"
 
         user_prompt = (
-            "Answer the user question using the context.\n\n"
-            f"Context:\n{ctx_block}\n\nQuestion: {query}\n"
+            "Based on the Confluence documentation context below, provide a detailed and comprehensive answer to the user's question. "
+            "Include all relevant specifics, examples, and actionable information.\n\n"
+            f"=== CONTEXT FROM CONFLUENCE ===\n{ctx_block}\n\n"
+            f"=== USER QUESTION ===\n{query}\n\n"
+            "Provide a detailed answer with citations:"
         )
         messages: List[Dict[str, str]] = [{"role": "system", "content": system}]
         # Add brief summarized chat history for continuity

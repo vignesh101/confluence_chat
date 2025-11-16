@@ -25,14 +25,20 @@ async def on_chat_start():
     await cl.Message(
         content=(
             "Hi! Ask me anything about your Confluence.\n\n"
-            "Use the 'Start New Chat' action below to clear this conversation."
+            "Use the actions below to manage your conversation."
         ),
         actions=[
-            # Include an explicit payload to satisfy Chainlit's Action schema in some versions
+            cl.Action(
+                name="show_history",
+                value="history",
+                label="📜 Show History",
+                description="View conversation history",
+                payload={},
+            ),
             cl.Action(
                 name="new_chat",
                 value="new",
-                label="Start New Chat",
+                label="🔄 Start New Chat",
                 description="Clear history and start fresh",
                 payload={},
             ),
@@ -45,6 +51,31 @@ async def restart_chat(action=None):
     # Clear session history
     cl.user_session.set("history", [])
     await cl.Message(content="History cleared. You can start a new chat now.").send()
+
+
+@cl.action_callback("show_history")
+async def show_history(action=None):
+    history: list[dict] = cl.user_session.get("history") or []
+    if not history:
+        await cl.Message(content="📜 **Conversation History**\n\nNo conversation history yet. Start asking questions!").send()
+        return
+
+    # Format history for display
+    lines = ["📜 **Conversation History**\n"]
+    for i, msg in enumerate(history, start=1):
+        role = msg.get("role", "user" if msg.get("is_user") else "assistant")
+        content = msg.get("content", "")
+        # Truncate long messages for display
+        if len(content) > 500:
+            content = content[:500] + "..."
+
+        if role == "user":
+            lines.append(f"**[{i}] 👤 User:**\n{content}\n")
+        else:
+            lines.append(f"**[{i}] 🤖 Assistant:**\n{content}\n")
+
+    lines.append(f"\n---\n*Total exchanges: {len(history)}*")
+    await cl.Message(content="\n".join(lines)).send()
 
 
 def _format_sources(chunks: list[RetrievedChunk]) -> str:

@@ -10,6 +10,7 @@ Features
 - OpenAI-compatible LLM and embeddings with configurable `base_url`, `model`, `embeddings_model`.
 - Shared `PROXY_URL` and `DISABLE_SSL` applied to both LLM and Confluence requests.
 - Chainlit UI with per-session chat history and a "Start New Chat" action.
+ - Quality-focused retrieval: optional multi-query expansion, MMR diversity, per-page chunk caps, and context budget to improve answer relevance and readability.
 
 Quickstart
 ----------
@@ -41,6 +42,7 @@ LLM / OpenAI-compatible:
 - `API_KEY`: API key for the LLM provider.
 - `MODEL_NAME`: Chat model name (e.g., `gpt-4o-mini`).
 - `EMBEDDINGS_MODEL_NAME`: Embeddings model (e.g., `text-embedding-3-small`).
+- `TEMPERATURE`: Chat generation temperature (default: `0.2`).
 
  Confluence:
  - `CONFLUENCE_BASE_URL`: Base URL to your Confluence (e.g., `https://your-domain.atlassian.net/wiki`).
@@ -50,7 +52,7 @@ LLM / OpenAI-compatible:
  - `CONFLUENCE_EMAIL` (optional): Email for Basic auth (typical for Confluence Cloud API tokens).
  - `CONFLUENCE_USERNAME` (optional): Username for Basic auth (useful for Confluence Data Center when using username + PAT/password).
 
-Networking:
+ Networking:
 - `PROXY_URL`: HTTP(S) proxy URL applied to both LLM and Confluence clients. Example: `http://user:pass@proxy.yourco.local:8080`.
 - `DISABLE_SSL`: `true`/`false`. If `true`, SSL verification is disabled for both clients (use only if you know what you're doing).
 
@@ -60,12 +62,26 @@ RAG options (optional):
 - `CHUNK_SIZE`: Characters per chunk (default: `1200`).
 - `CHUNK_OVERLAP`: Overlap between chunks (default: `150`).
 - `TOP_K`: Number of chunks to retrieve for context (default: `6`).
+- `MAX_CHUNKS_PER_PAGE`: Limit chunks per Confluence page in final context (default: `2`). Helps reduce redundancy.
+- `MAX_CONTEXT_CHARS`: Max total characters to include from retrieved chunks in the prompt (default: `12000`). Prevents overly long prompts.
+- `USE_MULTI_QUERY`: If `true`, generate alternative query phrasings to broaden recall (default: `true`).
+- `NUM_QUERY_VARIANTS`: Number of alternative phrasings to generate (default: `2`).
+- `RETRIEVAL_POOL_FACTOR`: Retrieve `TOP_K * factor` candidates before MMR selection (default: `4`).
+- `MMR_LAMBDA`: Trade-off for MMR (0..1). Higher favors similarity, lower favors diversity (default: `0.5`).
+- `MAX_HISTORY_TURNS`: Number of recent messages to keep in prompt (default: `10`).
+- `SHOW_QUERY_DETAILS`: If `true`, append a collapsible block with query analysis (intent/entities/timeframe), query expansion, CQL used, candidate stats, and selected items (default: `false`).
+
+Confluence filters (optional):
+- `CONFLUENCE_SPACES`: Comma-separated list of space keys to search (e.g., `ENG,HR,PROD`).
+- `CONFLUENCE_LABELS`: Comma-separated labels to require (e.g., `policy,architecture`).
 
 How it works
 ------------
 - On each question, the app searches Confluence across all spaces using CQL for relevant pages.
 - It fetches those pages' storage format, converts to text, chunks them, and upserts into a FAISS index.
-- It then performs vector similarity search over the index, builds a context, and asks the LLM to answer.
+- It then performs vector similarity search over the index, optionally expands the query into variants, and collects a larger candidate pool.
+- A Maximal Marginal Relevance (MMR) step selects the final set of chunks, enforcing a per-page cap and a prompt-size budget, to improve diversity and reduce redundancy.
+- The LLM answers with inline citations like `[1]` that correspond to the numbered context entries. The UI also lists source links at the end.
 - The UI maintains chat history for context continuity and offers a "Start New Chat" action to clear history.
 
 Notes

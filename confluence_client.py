@@ -11,6 +11,8 @@ from config import Settings
 
 class ConfluenceClient:
     def __init__(self, cfg: Settings):
+        self.cfg = cfg
+        self.last_cql: Optional[str] = None
         if not cfg.confluence_base_url:
             raise ValueError("CONFLUENCE_BASE_URL is required")
         if not cfg.confluence_access_token:
@@ -128,7 +130,20 @@ class ConfluenceClient:
         # CQL search across all spaces and page types
         # Escaping single quotes in query for CQL
         q = query.replace("'", "\\'")
-        cql = f"type = page AND (title ~ '{q}' OR text ~ '{q}') ORDER BY lastmodified DESC"
+        cql_filters: List[str] = ["type = page"]
+        cql_filters.append(f"(title ~ '{q}' OR text ~ '{q}')")
+        # Optional space filters
+        spaces = getattr(self.cfg, "confluence_spaces", None)
+        if spaces:
+            items = ", ".join([f"'{s.replace("'", "\\'")}'" for s in spaces])
+            cql_filters.append(f"space in ({items})")
+        # Optional label filters
+        labels = getattr(self.cfg, "confluence_labels", None)
+        if labels:
+            items = ", ".join([f"'{s.replace("'", "\\'")}'" for s in labels])
+            cql_filters.append(f"label in ({items})")
+        cql = " AND ".join(cql_filters) + " ORDER BY lastmodified DESC"
+        self.last_cql = cql
         params = {"cql": cql, "limit": min(limit, 100), "expand": "space,content.metadata"}
         r = self.client.get("/search", params=params)
         self._ensure_ok(r)

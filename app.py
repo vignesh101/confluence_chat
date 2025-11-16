@@ -3,7 +3,7 @@ from __future__ import annotations
 import chainlit as cl
 
 from config import load_settings
-from rag import RAGPipeline, RetrievedChunk
+from rag import RAGPipeline, RetrievedChunk, QueryDebugInfo
 
 
 @cl.on_chat_start
@@ -66,6 +66,42 @@ def _format_sources(chunks: list[RetrievedChunk]) -> str:
     return "\n".join(lines)
 
 
+def _format_query_details(dbg: QueryDebugInfo) -> str:
+    # Collapsible markdown details block
+    lines: list[str] = []
+    lines.append("\n<details>\n<summary><strong>Query details</strong></summary>\n")
+    lines.append("")
+    lines.append(f"- Original query: `{dbg.original_query}`")
+    if dbg.expanded_queries and (len(dbg.expanded_queries) > 1 or dbg.expanded_queries[0] != dbg.original_query):
+        lines.append("- Expanded queries:")
+        for q in dbg.expanded_queries:
+            lines.append(f"  - {q}")
+    if dbg.cql:
+        lines.append(f"- Confluence CQL: `{dbg.cql}`")
+    lines.append(f"- Pages considered: {dbg.pages_considered}")
+    lines.append(f"- Candidate pool size: {dbg.candidate_pool_size}")
+    lines.append(f"- Selected: {dbg.selected_count} / top_k={dbg.top_k}; MMR={dbg.mmr_lambda}; max_chunks_per_page={dbg.max_chunks_per_page}")
+    lines.append(f"- Context size: {dbg.context_chars} chars (budget {dbg.context_budget})")
+    if dbg.selected_items:
+        lines.append("- Selected items:")
+        for i, it in enumerate(dbg.selected_items, start=1):
+            title = it.get("title") or "Untitled"
+            url = it.get("url")
+            sim = it.get("similarity")
+            sim_txt = f" sim={sim:.3f}" if isinstance(sim, float) else ""
+            if url:
+                lines.append(f"  - [{i}] {title} ({url}){sim_txt}")
+            else:
+                lines.append(f"  - [{i}] {title}{sim_txt}")
+    if dbg.analysis:
+        lines.append("\n- Query analysis:")
+        # Indent analysis block
+        for ln in dbg.analysis.splitlines():
+            lines.append(f"  {ln}")
+    lines.append("\n</details>")
+    return "\n".join(lines)
+
+
 @cl.on_message
 async def on_message(message: cl.Message):
     rag: RAGPipeline | None = cl.user_session.get("rag")  # type: ignore
@@ -79,9 +115,14 @@ async def on_message(message: cl.Message):
     cl.user_session.set("history", history)
 
     try:
-        answer, contexts = await cl.make_async(rag.answer)(message.content, history)
+        answer, contexts, dbg = await cl.make_async(rag.answer)(message.content, history)
         sources_block = _format_sources(contexts)
-        final = answer + (f"\n\n{sources_block}" if sources_block else "")
+        details_block = _format_query_details(dbg) if getattr(rag.cfg, "show_query_details", False) else ""
+        final = answer
+        if sources_block:
+            final += f"\n\n{sources_block}"
+        if details_block:
+            final += f"\n\n{details_block}"
         await cl.Message(content=final).send()
         # Append assistant response for continuity
         history.append({"role": "assistant", "content": answer})

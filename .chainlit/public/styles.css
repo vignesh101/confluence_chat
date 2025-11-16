@@ -1,6 +1,6 @@
 /* Gentle UI adjustments for Chainlit */
 
-/* Add bottom padding so floating buttons don’t overlap content */
+/* Add bottom padding so floating buttons don't overlap content */
 [data-testid="messages-container"],
 .cl-message-list,
 .messages-container {
@@ -22,5 +22,306 @@ button[data-testid="scroll-to-bottom"],
 .message-content {
   overflow: visible !important;
   max-height: none !important;
+}
+
+/* ===== History Drawer Styles ===== */
+
+/* Button container in left corner */
+#history-btn-container {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 1100;
+  display: flex;
+  gap: 8px;
+}
+
+#history-drawer-btn,
+#new-chat-btn {
+  background: #f3f4f6;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  color: #374151;
+}
+
+#history-drawer-btn:hover,
+#new-chat-btn:hover {
+  background: #e5e7eb;
+  border-color: #9ca3af;
+}
+
+#history-drawer-btn:active,
+#new-chat-btn:active {
+  background: #d1d5db;
+}
+
+/* Drawer overlay */
+#history-drawer-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.3);
+  z-index: 1200;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+#history-drawer-overlay.visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* Drawer panel */
+#history-drawer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 360px;
+  max-width: 90vw;
+  height: 100%;
+  background: #ffffff;
+  box-shadow: 4px 0 20px rgba(0, 0, 0, 0.15);
+  z-index: 1300;
+  transform: translateX(-100%);
+  transition: transform 0.3s ease;
+  display: flex;
+  flex-direction: column;
+}
+
+#history-drawer.open {
+  transform: translateX(0);
+}
+
+/* Drawer header */
+.drawer-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid #e5e7eb;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #f9fafb;
+}
+
+.drawer-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.drawer-close {
+  background: transparent;
+  border: none;
+  padding: 4px;
+  cursor: pointer;
+  color: #6b7280;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.drawer-close:hover {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+/* Drawer content */
+.drawer-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+/* Conversations list */
+#conversations-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.loading,
+.no-conversations {
+  text-align: center;
+  color: #6b7280;
+  padding: 20px;
+  font-size: 14px;
+}
+
+/* Conversation item */
+.conversation-item {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 12px;
+  transition: all 0.2s ease;
+}
+
+.conversation-item:hover {
+  border-color: #d1d5db;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.conv-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 8px;
+}
+
+.conv-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: #111827;
+  line-height: 1.4;
+  flex: 1;
+  word-break: break-word;
+}
+
+.conv-delete {
+  background: transparent;
+  border: none;
+  padding: 4px;
+  cursor: pointer;
+  color: #9ca3af;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.conv-delete:hover {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.conv-preview {
+  font-size: 13px;
+  color: #6b7280;
+  line-height: 1.4;
+  margin-bottom: 8px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.conv-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: #9ca3af;
+  margin-bottom: 10px;
+}
+
+.conv-load {
+  width: 100%;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.conv-load:hover {
+  background: #2563eb;
+}
+
+.conv-load:active {
+  background: #1d4ed8;
+}
+
+/* Notification */
+.history-notification {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1f2937;
+  color: white;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  z-index: 1500;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  transition: opacity 0.3s ease;
+}
+
+.history-notification.fade-out {
+  opacity: 0;
+}
+
+/* Hide command messages from the user */
+.hidden-command {
+  display: none !important;
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  #history-drawer-btn,
+  #new-chat-btn {
+    background: #374151;
+    border-color: #4b5563;
+    color: #e5e7eb;
+  }
+
+  #history-drawer-btn:hover,
+  #new-chat-btn:hover {
+    background: #4b5563;
+    border-color: #6b7280;
+  }
+
+  #history-drawer {
+    background: #1f2937;
+  }
+
+  .drawer-header {
+    background: #111827;
+    border-color: #374151;
+  }
+
+  .drawer-header h3 {
+    color: #f3f4f6;
+  }
+
+  .drawer-close {
+    color: #9ca3af;
+  }
+
+  .drawer-close:hover {
+    background: #374151;
+    color: #e5e7eb;
+  }
+
+  .conversation-item {
+    background: #111827;
+    border-color: #374151;
+  }
+
+  .conversation-item:hover {
+    border-color: #4b5563;
+  }
+
+  .conv-title {
+    color: #f3f4f6;
+  }
+
+  .conv-preview {
+    color: #9ca3af;
+  }
+
+  .conv-meta {
+    color: #6b7280;
+  }
 }
 

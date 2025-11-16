@@ -1,14 +1,20 @@
 from __future__ import annotations
 
+import json
 import chainlit as cl
 
 from config import load_settings
 from rag import RAGPipeline, RetrievedChunk, QueryDebugInfo
+import conversation_db as cdb
 
 
 @cl.on_chat_start
 async def on_chat_start():
     cfg = load_settings()
+
+    # Create a new conversation in the database
+    conv_id = cdb.create_conversation()
+    cl.user_session.set("conversation_id", conv_id)
 
     # Persist session state
     cl.user_session.set("history", [])
@@ -48,6 +54,9 @@ async def on_chat_start():
 
 @cl.action_callback("new_chat")
 async def restart_chat(action=None):
+    # Create a new conversation in the database
+    conv_id = cdb.create_conversation()
+    cl.user_session.set("conversation_id", conv_id)
     # Clear session history
     cl.user_session.set("history", [])
     await cl.Message(content="History cleared. You can start a new chat now.").send()
@@ -133,10 +142,65 @@ def _format_query_details(dbg: QueryDebugInfo) -> str:
     return "\n".join(lines)
 
 
+async def handle_drawer_command(command: str):
+    """Handle special commands from the history drawer UI."""
+    if command == "__CMD__LIST_CONVERSATIONS__":
+        conversations = cdb.list_conversations(limit=50)
+        await cl.Message(
+            content=f"__CONV_LIST__{json.dumps(conversations)}__END_CONV_LIST__"
+        ).send()
+
+    elif command.startswith("__CMD__LOAD__"):
+        conv_id = command.replace("__CMD__LOAD__", "")
+        messages = cdb.get_conversation_messages(conv_id)
+        if not messages:
+            await cl.Message(content="Conversation not found or empty.").send()
+            return
+
+        # Update session with loaded conversation
+        cl.user_session.set("conversation_id", conv_id)
+        cl.user_session.set("history", messages)
+
+        # Display the loaded conversation
+        lines = ["**Loaded conversation:**\n"]
+        for msg in messages:
+            role = msg.get("role", "user")
+            content = msg.get("content", "")
+            if len(content) > 300:
+                content = content[:300] + "..."
+
+            if role == "user":
+                lines.append(f"**You:** {content}\n")
+            else:
+                lines.append(f"**Assistant:** {content}\n")
+
+        lines.append(f"\n*{len(messages)} messages loaded. Continue the conversation below.*")
+        await cl.Message(content="\n".join(lines)).send()
+
+    elif command.startswith("__CMD__DELETE__"):
+        conv_id = command.replace("__CMD__DELETE__", "")
+        current_conv_id = cl.user_session.get("conversation_id")
+        if conv_id == current_conv_id:
+            await cl.Message(content="Cannot delete the current active conversation.").send()
+            return
+
+        deleted = cdb.delete_conversation(conv_id)
+        if deleted:
+            await cl.Message(content="__CONV_DELETED__").send()
+        else:
+            await cl.Message(content="Failed to delete conversation.").send()
+
+
 @cl.on_message
 async def on_message(message: cl.Message):
+    # Handle special commands from the drawer UI
+    if message.content.startswith("__CMD__"):
+        await handle_drawer_command(message.content)
+        return
+
     rag: RAGPipeline | None = cl.user_session.get("rag")  # type: ignore
     history: list[dict] = cl.user_session.get("history") or []  # type: ignore
+    conv_id: str | None = cl.user_session.get("conversation_id")  # type: ignore
     if not rag:
         await cl.Message(content="RAG pipeline not ready. Check configuration.").send()
         return
@@ -144,6 +208,10 @@ async def on_message(message: cl.Message):
     # Append user message to history
     history.append({"role": "user", "content": message.content, "is_user": True})
     cl.user_session.set("history", history)
+
+    # Save user message to database
+    if conv_id:
+        cdb.save_message(conv_id, "user", message.content)
 
     try:
         # Live status message for real-time progress
@@ -206,6 +274,10 @@ async def on_message(message: cl.Message):
         # Append assistant response for continuity
         history.append({"role": "assistant", "content": answer_text})
         cl.user_session.set("history", history)
+
+        # Save assistant response to database
+        if conv_id:
+            cdb.save_message(conv_id, "assistant", answer_text)
     except Exception as e:
         try:
             status.content = f"❌ Error: {e}"
@@ -213,3 +285,69 @@ async def on_message(message: cl.Message):
         except Exception:
             pass
         await cl.Message(content=f"Error: {e}").send()
+
+
+# Action callbacks for history drawer
+@cl.action_callback("list_conversations")
+async def list_conversations_action(action=None):
+    """Return list of all conversations for the drawer."""
+    conversations = cdb.list_conversations(limit=50)
+    # Send as a special message that the JS can parse
+    await cl.Message(
+        content=f"__CONV_LIST__{json.dumps(conversations)}__END_CONV_LIST__"
+    ).send()
+
+
+@cl.action_callback("load_conversation")
+async def load_conversation_action(action):
+    """Load a specific conversation into the current session."""
+    conv_id = action.payload.get("conversation_id") if action.payload else None
+    if not conv_id:
+        await cl.Message(content="No conversation ID provided.").send()
+        return
+
+    # Load messages from database
+    messages = cdb.get_conversation_messages(conv_id)
+    if not messages:
+        await cl.Message(content="Conversation not found or empty.").send()
+        return
+
+    # Update session with loaded conversation
+    cl.user_session.set("conversation_id", conv_id)
+    cl.user_session.set("history", messages)
+
+    # Display the loaded conversation
+    lines = ["**Loaded conversation:**\n"]
+    for msg in messages:
+        role = msg.get("role", "user")
+        content = msg.get("content", "")
+        if len(content) > 300:
+            content = content[:300] + "..."
+
+        if role == "user":
+            lines.append(f"**You:** {content}\n")
+        else:
+            lines.append(f"**Assistant:** {content}\n")
+
+    lines.append(f"\n*{len(messages)} messages loaded. Continue the conversation below.*")
+    await cl.Message(content="\n".join(lines)).send()
+
+
+@cl.action_callback("delete_conversation")
+async def delete_conversation_action(action):
+    """Delete a conversation from history."""
+    conv_id = action.payload.get("conversation_id") if action.payload else None
+    if not conv_id:
+        await cl.Message(content="No conversation ID provided.").send()
+        return
+
+    current_conv_id = cl.user_session.get("conversation_id")
+    if conv_id == current_conv_id:
+        await cl.Message(content="Cannot delete the current active conversation.").send()
+        return
+
+    deleted = cdb.delete_conversation(conv_id)
+    if deleted:
+        await cl.Message(content="__CONV_DELETED__").send()
+    else:
+        await cl.Message(content="Failed to delete conversation.").send()

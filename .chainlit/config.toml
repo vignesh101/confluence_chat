@@ -2,15 +2,15 @@
 name = "Confluence Chat"
 
 # Note:
-# The Conversations (history) icon is controlled by Chainlit's persistence.
-# Ensure a DB is configured for the server (e.g. set CHAINLIT_DB_URL=sqlite:///./chainlit.db)
-# and that your version supports the history panel.
+# Custom history drawer implementation for conversation management.
+# Conversations are stored in a local SQLite database (conversations.db).
 
 [ui]
-# Attempt to place Conversations (history) after New Chat in the header.
-# Support depends on Chainlit version; some versions may ignore ordering.
-header_buttons = ["new_chat", "conversations", "step_view", "settings"]
+# Keep minimal header buttons since we have custom drawer
+header_buttons = ["step_view", "settings"]
 
-# If your version auto-loads public styles, this will apply.
-# Used to avoid the mid-content scroll bubble overlap.
-custom_css = "public/styles.css"
+# Custom CSS for drawer styling and UI adjustments
+custom_css = "/public/styles.css"
+
+# Custom head for loading JavaScript
+custom_head = "/public/head.html"

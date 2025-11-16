@@ -123,7 +123,8 @@ async def on_message(message: cl.Message):
         pages = await cl.make_async(rag.confluence.search_pages)(
             message.content, limit=rag.cfg.max_confluence_search_results
         )
-        await status.update(content=f"🔎 Found {len(pages)} pages. Indexing content…")
+        status.content = f"🔎 Found {len(pages)} pages. Indexing content…"
+        await status.update()
 
         # 2) Ensure pages are indexed into vector store
         if pages:
@@ -132,17 +133,21 @@ async def on_message(message: cl.Message):
         # 3) Expand queries (optional)
         queries = await cl.make_async(rag._expand_queries)(message.content)  # type: ignore[attr-defined]
         if len(queries) > 1:
-            await status.update(content=f"🧭 Expanded to {len(queries)} queries. Retrieving candidates…")
+            status.content = f"🧭 Expanded to {len(queries)} queries. Retrieving candidates…"
+            await status.update()
         else:
-            await status.update(content="🧭 Using original query. Retrieving candidates…")
+            status.content = "🧭 Using original query. Retrieving candidates…"
+            await status.update()
 
         # 4) Retrieve and select context (includes MMR & budget)
         contexts, dbg = await cl.make_async(rag.retrieve)(message.content)
-        await status.update(content=f"📚 Selected {len(contexts)} context chunks. Building prompt…")
+        status.content = f"📚 Selected {len(contexts)} context chunks. Building prompt…"
+        await status.update()
 
         # 5) Build prompt
         msgs = rag.build_prompt(message.content, history, contexts)
-        await status.update(content="✍️ Generating answer…")
+        status.content = "✍️ Generating answer…"
+        await status.update()
 
         # 6) Stream the final answer tokens
         answer_msg = cl.Message(content="")
@@ -160,17 +165,20 @@ async def on_message(message: cl.Message):
             final += f"\n\n{sources_block}"
         if details_block:
             final += f"\n\n{details_block}"
-        await answer_msg.update(content=final)
+        answer_msg.content = final
+        await answer_msg.update()
 
         # Done
-        await status.update(content="✅ Done")
+        status.content = "✅ Done"
+        await status.update()
 
         # Append assistant response for continuity
         history.append({"role": "assistant", "content": answer_text})
         cl.user_session.set("history", history)
     except Exception as e:
         try:
-            await status.update(content=f"❌ Error: {e}")  # type: ignore[has-type]
+            status.content = f"❌ Error: {e}"
+            await status.update()  # type: ignore[has-type]
         except Exception:
             pass
         await cl.Message(content=f"Error: {e}").send()
